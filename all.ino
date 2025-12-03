@@ -1,7 +1,9 @@
-// нужно вынести в инит. если серво вращается то всегда проверять концевик, потому что если он сработал то счет угла ноль
+
 #include <WiFi.h> //подключаем библиотеку для работы с WiFi
 #include <PubSubClient.h> // подключаем библиотеку для работы с MQTT
 #include <ESP32Servo.h>
+
+//using namespace std;
 
 // define
 Servo servo1;
@@ -13,6 +15,14 @@ const int clk = 5; // энкодер
 const int dt = 18; // энкодер 
 const int sw = 19; // энкодер, кнопка
 
+
+// датчики
+float d1 = 25;
+float d2 = 100;
+float d3 = 27;
+float d4 = 24;
+int m0 = 0;
+int m1 = 5;
 // Переменные для управления состоянием
 bool isRotating = false;
 bool lastButtonState = HIGH;
@@ -38,8 +48,9 @@ long lastMsg = 0;
 char msg[50];
 int value = 0;
 String inmsg = "";
-int BUILTIN_LED = 12;
+int BUILTIN_LED = 19;
 
+//String inmsg1 = "";
 
 void setup_wifi() 
 {
@@ -65,21 +76,54 @@ void setup_wifi()
 void callback(char* topic, byte* payload, unsigned int length) {
   inmsg = "";
   // Serial.print("Message arrived [");
+  Serial.print("] ");
   Serial.print(topic);
-  // Serial.print("] ");
+  
+  Serial.print("сработал датчик0" + String(topic));
+  //a = topic;
   for (int i = 0; i < length; i++) {
-    inmsg += (char)payload[i];
+    inmsg += (char)payload[i];}
+    //hd.push_back((char)payload[i]);
+  if (String(topic) == "/humidifire/humiditysensor/01/"){
+      d1 = inmsg.toFloat();
+      }
+    
+  if (String(topic) == "/humidifire/humiditysensor/02/"){
+      d2 = inmsg.toFloat();}
+    
+  if (String(topic) == "/humidifire/humiditysensor/03/"){
+      d3 = inmsg.toFloat();}
+    
+  if (String(topic) == "/humidifire/humiditysensor/04/"){
+      d4 = inmsg.toFloat();}
+    
     // Serial.print((char)payload[i]);
-  }
   // Serial.println(inmsg);
   // Serial.println("from topic: " + inmsg);
+  float  m = minimum(d1, d2, d3, d4);
+  if (m == d4){
+    m1 = 4;
+    Serial.print("aaaaaaaaaa");}
+  if (m == d1){
+    m1 = 1;
+    Serial.print("bbbbbbbbbbb");}
+  if (m == d3){
+    m1 = 3;
+    Serial.print("cccccccccccc");}
+  Serial.print(m1);
+  Serial.print(m0);
+  if (m0!=m1){
+    init_without_button();
+    rotate_servo(m);}
 
   if ((String)inmsg.c_str() == "off") {
-    digitalWrite(BUILTIN_LED, LOW);  // выключаем светодиод
-    Serial.println(inmsg.c_str());
+    digitalWrite(BUILTIN_LED,  HIGH); // выключаем светодиод
+    //Serial.println(String(inmsg.c_str()) + "dd");
     sendData("/miptfab/esp32led/ledState/", "OFF"); // отправляем состояние светодиода
-  } else {
+  } else {//вот в этом месте приходят данные в порт если датчики тригерят
     digitalWrite(BUILTIN_LED, HIGH); // включаем светодиод
+    delay(3000);
+    digitalWrite(BUILTIN_LED, LOW);
     Serial.println(inmsg.c_str());
     sendData("/miptfab/esp32led/ledState/", "ON"); // отправляем состояние светодиода
   }
@@ -116,14 +160,150 @@ bool sendData(String topic, String data) {
     reconnect();
   } else {
     client.publish(topic.c_str(), data.c_str());
-//     Serial.println(topic + " " + data);
+     Serial.println(topic + " " + data);
   }
   return true;
 }
 
+void init_without_button(){
+  bool isRotating = false;
+  int endValue = digitalRead(endPin);   
+  if (!isRotating) {
+      // Запускаем вращение
+      
+      isRotating = true;
+      // Подключаем серво
+      if (!servo1.attached()) {
+          servo1.attach(servoPin);
+      }
+      // Запускаем вращение
+      servo1.write(94);
+         
+  } /*else {
+      // Останавливаем вращение при повторном нажатии
+      isRotating = false;
+      // Останавливаем серво
+      servo1.write(93); // Стоп
+      delay(1000);
+      servo1.detach();
+      delay(1000);
+  }*/
+
+  bool flag = true;
+  // Если серво вращается, проверяем концевик
+  while (flag == true) {
+      // Проверяем оптический концевик
+      if (digitalRead(endPin) == HIGH) {
+          // Концевик сработал - останавливаем
+          isRotating = false;
+          servo1.write(93); // Стоп
+          delay(1000);
+          servo1.detach();
+          delay(2000);
+          flag = false;
+          //lastButtonState = HIGH;
+      } else {
+          // Продолжаем вращение
+          delay(50);
+      }
+  }
+  
+  delay(100);
+}
+
+
+float rotate_servo(float d){
+  int endValue = digitalRead(endPin);
+  if (!servo1.attached()) {
+              servo1.attach(servoPin);
+          }
+  if (d == d4){
+    m0 = 4;
+    Serial.print("Четвертый");
+    Serial.print(d4);
+    servo1.write(94);
+    delay(2250);
+    servo1.write(93); // Стоп
+    delay(1000);
+    servo1.detach();
+    delay(1000);
+  }
+
+  
+
+  if (d == d3){
+    m0 = 3;
+    Serial.print("Третий");
+    servo1.write(94);
+    delay(1125);
+    servo1.write(93); // Стоп
+    delay(1000);
+    servo1.detach();
+    delay(1000);
+  }
+
+  if (d == d1){
+    m0 = 1;
+    Serial.print("Первый");
+    servo1.write(94);
+    delay(5500);
+    servo1.write(93); // Стоп
+    delay(1000);
+    servo1.detach();
+    delay(1000);
+  }
+
+  return 0;
+}
+
+
+
+/*void rotate_servo_4(){
+  int endValue = digitalRead(endPin);
+  if (!servo1.attached()) {
+              servo1.attach(servoPin);
+          }
+  servo1.write(94);
+  delay(2250);
+  servo1.write(93); // Стоп
+          delay(1000);
+          servo1.detach();
+          delay(1000);
+  
+  }
+
+void rotate_servo_1(){
+int endValue = digitalRead(endPin);
+if (!servo1.attached()) {
+            servo1.attach(servoPin);
+        }
+servo1.write(94);
+delay(3375);
+servo1.write(93); // Стоп
+        delay(1000);
+        servo1.detach();
+        delay(1000);
+
+}
+
+void rotate_servo_3(){
+  int endValue = digitalRead(endPin);
+  if (!servo1.attached()) {
+              servo1.attach(servoPin);
+          }
+  servo1.write(94);
+  delay(1125);
+  servo1.write(93); // Стоп
+          delay(1000);
+          servo1.detach();
+          delay(1000);
+  
+  }
+  */
 void init(){
   int buttonState = digitalRead(ButtonPin);
   int endValue = digitalRead(endPin);
+  //digitalWrite(rele, HIGH);
   // Если кнопка нажата 
   if (buttonState == LOW && lastButtonState == HIGH) {
       
@@ -136,7 +316,8 @@ void init(){
               servo1.attach(servoPin);
           }
           // Запускаем вращение
-          servo1.write(180);
+          servo1.write(94);
+          
           
           
       } else {
@@ -170,7 +351,14 @@ void init(){
   
   delay(100);
 }
-
+float minimum(float d1,float d2,float d3,float d4){
+  float m = 100;
+  if (d1<m){m = d1;}
+  if (d2<m){m = d2;}
+  if (d3<m){m = d3;}
+  if (d4<m){m = d4;}
+  return m;
+  }
 void encoder(){
   // Чтение энкодера
   int currentCLK = digitalRead(clk);
@@ -206,7 +394,7 @@ void setup() {
   client.setServer(mqtt_server, 1883);
   client.setCallback(callback);
   digitalWrite(BUILTIN_LED, HIGH);
-  delay(3000);
+  delay(2500);
   digitalWrite(BUILTIN_LED, LOW);
 
   // servo
@@ -225,6 +413,9 @@ void setup() {
   pinMode(sw, INPUT_PULLUP);
 
   pinMode(ButtonPin, INPUT_PULLUP);
+
+  digitalWrite(rele, HIGH); // Подать питание
+  delay(1000); 
   }
 
 void loop() {
@@ -232,25 +423,36 @@ void loop() {
   /*if (touchRead(4)<20){
     Serial.println(touchRead(4));
     sendData("/humidifire/goto/", (String)touchRead(4));
-  }
+  }*/
   
   if (!client.connected()) {
     reconnect();
-    sendData("/humidifire/state/", "up");
+    //sendData("/humidifire/state/", "up");
   }
-  client.loop();*/
-  
+  client.loop();
+  //client.publish("/humidifire/humiditysensor/01/", "355");
+  //sendData("/humidifire/state/", "up");
   // INIT
   init();
+//float  m = minimum(d1, d2, d3, d4);
+  //rotate_servo(m);
+  //delay(10000);
+  //init_without_button();
+  //delay(1000);
   
   
   // включение увлажнителя
-  digitalWrite(rele, LOW); // Подать питание
-  delay(1000); 
-
+  //digitalWrite(rele, HIGH); // Подать питание
+  //delay(1000); 
+  //digitalWrite(rele, LOW); // Подать питание
+  //delay(5000);
   // энкодер
-  encoder();
+  //encoder();
   
+  /*if (digitalRead(endPin) == HIGH) {
+    rotate_servo_3();
+    }*/
+
   
   
 }
